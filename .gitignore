@@ -1,0 +1,14 @@
+# Local builds, downloads and validation output
+/release/
+/work/
+*.zip
+*.exe
+*.pdb
+*.log
+
+# Editor and local settings
+/.vs/
+*.user
+*.suo
+.env
+.env.*
