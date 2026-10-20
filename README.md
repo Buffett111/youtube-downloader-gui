@@ -2,11 +2,11 @@
 
 一款簡單的 Windows 桌面程式。貼上影片網址、選擇影片或音訊格式，即可下載到指定資料夾。預設使用 Windows 的「下載」資料夾，也支援已重新設定位置的下載資料夾。
 
-**[下載 Windows 64 位元版](https://github.com/Buffett111/youtube-downloader-gui/releases/latest)**：在 Release 的 Assets 下載 `SimpleDownloader-v1.1.0-windows-x64.zip`。解壓縮即可使用，不需要自行建置程式。版本更新內容與原始碼下載也放在同一頁。
+**[下載 Windows 64 位元版](https://github.com/Buffett111/youtube-downloader-gui/releases/latest)**：在 Release 的 Assets 下載 `SimpleDownloader-v1.1.1-windows-x64.zip`。解壓縮即可使用，不需要自行建置程式。版本更新內容與原始碼下載也放在同一頁。
 
 ## 開始使用
 
-1. 將下載的 ZIP 解壓縮到一般資料夾。
+1. 將下載的 ZIP 完整解壓縮到一般資料夾，保留 `影片與音樂下載器.exe.config` 與 EXE 在同一個資料夾；設定檔用於高 DPI 顯示支援。
 2. 雙擊 `影片與音樂下載器.exe`。
 3. 貼上網址，選擇「影片」或「音樂」、輸出格式與影片畫質。
 4. 如需變更儲存位置，按「瀏覽…」。
@@ -14,6 +14,8 @@
 6. 在「確認下載內容」視窗查看影片標題、下載數量、輸出格式與儲存位置。可勾選個別影片，或按「全選」下載整份播放清單；按「確認下載」才會開始下載影音。
 
 也可以先按右下角的「安裝下載工具」。安裝完成後，這個按鈕會改成「更新下載工具」。使用者不需要安裝 Python、設定環境變數或輸入命令列。
+
+更新時請先關閉舊版，再將新版 ZIP 完整解壓縮。已安裝的下載工具可繼續使用，不需要重新安裝。v1.1.1 修正高縮放比例下的網址欄、格式與品質選單、按鈕跑版；視窗空間不足時可捲動內容，不需要更改 Windows 的顯示縮放設定。
 
 需要 Windows 10／11 **64 位元**與 .NET Framework 4.8。近期 Windows 通常已包含此執行環境。首次安裝工具及下載影片時需要網路連線；安裝工具需要下載數個檔案，請讓進度完成。
 
@@ -64,6 +66,7 @@ src/
   ToolInstaller.cs     官方工具下載、雜湊驗證及更新
   Program.cs           程式進入點與單一執行個體
   AssemblyInfo.cs      程式版本資訊
+  app.config          .NET Framework 4.8 與每個螢幕的 DPI 支援設定
   app.manifest         權限、Windows 及 DPI 設定
   app.ico              程式圖示
 build.ps1              建置程式
@@ -78,6 +81,12 @@ tests/                 行為、確認視窗與本機影音整合測試
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tests\run-tests.ps1
+```
+
+版面回歸測試會在本機執行 100%～200% 的合成縮放與不同視窗尺寸檢查，並將預覽圖存至 `work\dpi-tests`。合成縮放不會變更 Windows 設定，也不代表已在每一種實體螢幕組合測試：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tests\run-layout-tests.ps1
 ```
 
 已透過 GUI 安裝工具後，也可用自製影音檔驗證實際的 yt-dlp、FFmpeg 下載與轉檔流程：

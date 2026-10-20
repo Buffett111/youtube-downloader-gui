@@ -23,8 +23,9 @@ $guiReferences = @('/reference:System.Web.Extensions.dll', '/reference:System.Dr
     '/reference:System.Net.Http.dll', '/reference:System.IO.Compression.dll', '/reference:System.IO.Compression.FileSystem.dll')
 $guiSources = @((Join-Path $PSScriptRoot 'GuiConfirmationTests.cs'), (Join-Path $projectDirectory 'src\MainForm.cs'),
     (Join-Path $projectDirectory 'src\DownloadConfirmForm.cs'), (Join-Path $projectDirectory 'src\DownloadService.cs'),
-    (Join-Path $projectDirectory 'src\ToolInstaller.cs'))
-& $compiler /nologo /target:exe @guiReferences "/out:$guiTestExecutable" @guiSources
+    (Join-Path $projectDirectory 'src\ToolInstaller.cs'), (Join-Path $projectDirectory 'src\AssemblyInfo.cs'))
+& $compiler /nologo /target:exe "/win32manifest:$(Join-Path $projectDirectory 'src\app.manifest')" @guiReferences "/out:$guiTestExecutable" @guiSources
 if ($LASTEXITCODE -ne 0) { throw 'GUI confirmation test compilation failed.' }
+Copy-Item -LiteralPath (Join-Path $projectDirectory 'src\app.config') -Destination ($guiTestExecutable + '.config') -Force
 & $guiTestExecutable $fixtureDirectory
 if ($LASTEXITCODE -ne 0) { throw 'GUI confirmation tests failed.' }

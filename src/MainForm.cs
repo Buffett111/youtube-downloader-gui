@@ -56,7 +56,7 @@ namespace SimpleDownloader
             AutoScaleDimensions = new SizeF(96F, 96F);
             AutoScaleMode = AutoScaleMode.Dpi;
             ClientSize = new Size(820, 755);
-            MinimumSize = new Size(720, 560);
+            MinimumSize = new Size(600, 420);
             StartPosition = FormStartPosition.CenterScreen;
             Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath);
             string toolPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SimpleDownloader", "tools");
@@ -67,120 +67,154 @@ namespace SimpleDownloader
             lastOutputDirectory = folderBox.Text;
             RefreshTools();
             FormClosing += OnClosing;
+            DpiChanged += delegate
+            {
+                BeginInvoke(new MethodInvoker(delegate
+                {
+                    if (!IsDisposed) FitToWorkingArea(false);
+                }));
+            };
             ResumeLayout(true);
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            FitToWorkingArea(true);
+        }
+
+        private void FitToWorkingArea(bool center)
+        {
             Rectangle workingArea = Screen.FromControl(this).WorkingArea;
-            Height = Math.Min(Height, workingArea.Height - ScalePixels(24));
-            Width = Math.Min(Width, workingArea.Width - ScalePixels(24));
+            int availableWidth = Math.Max(1, workingArea.Width - ScalePixels(24));
+            int availableHeight = Math.Max(1, workingArea.Height - ScalePixels(24));
+            MinimumSize = new Size(Math.Min(MinimumSize.Width, availableWidth), Math.Min(MinimumSize.Height, availableHeight));
+            if (WindowState != FormWindowState.Normal) return;
+            Size = new Size(Math.Min(Width, availableWidth), Math.Min(Height, availableHeight));
+            Location = center
+                ? new Point(workingArea.Left + (workingArea.Width - Width) / 2, workingArea.Top + (workingArea.Height - Height) / 2)
+                : new Point(Math.Max(workingArea.Left, Math.Min(Left, workingArea.Right - Width)),
+                    Math.Max(workingArea.Top, Math.Min(Top, workingArea.Bottom - Height)));
         }
 
         private void BuildInterface()
         {
-            root.Dock = DockStyle.Fill;
-            root.Padding = new Padding(30, 20, 30, 16);
+            // Let each row measure its content. Fixed pixel rows and Layout callbacks
+            // can clip native inputs or scale widths twice on high-DPI displays.
+            var viewport = new Panel { Name = "ContentViewport", Dock = DockStyle.Fill, AutoScroll = true };
+            Controls.Add(viewport);
+            root.Name = "MainContent";
+            root.SuspendLayout();
+            root.Dock = DockStyle.Top;
+            root.AutoSize = true;
+            root.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            root.Padding = new Padding(24, 20, 24, 16);
+            root.Margin = Padding.Empty;
             root.ColumnCount = 1;
             root.RowCount = 8;
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            int[] heights = { 82, 110, 147, 113, 62, 106, 0, 64 };
-            foreach (int height in heights) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-            root.AutoScroll = true;
-            Controls.Add(root);
+            for (int row = 0; row < root.RowCount; row++)
+                root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            viewport.Controls.Add(root);
 
-            var heading = new Panel { Dock = DockStyle.Fill, Margin = Padding.Empty };
-            var title = LabelAt("影片與音樂下載器", 0, 0, 480, 34, 21F, true);
-            heading.Controls.Add(title);
-            heading.Controls.Add(LabelAt("貼上網址，選擇格式，把喜歡的內容存到電腦。", 1, 44, 640, 24, 10F, false, Muted));
-            var mark = LabelAt("yt-dlp", 0, 6, 100, 28, 11F, true, Accent);
-            mark.Dock = DockStyle.Right;
-            mark.TextAlign = ContentAlignment.TopRight;
-            heading.Controls.Add(mark);
+            var heading = Table(2, 2);
+            heading.Margin = new Padding(0, 0, 0, 18);
+            heading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            heading.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            var title = Caption("影片與音樂下載器", true);
+            title.Font = new Font(Font.FontFamily, 21F, FontStyle.Bold);
+            title.Margin = new Padding(0, 0, 0, 8);
+            heading.Controls.Add(title, 0, 0);
+            var mark = Caption("yt-dlp", true);
+            mark.ForeColor = Accent;
+            mark.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            mark.Margin = new Padding(12, 8, 0, 0);
+            heading.Controls.Add(mark, 1, 0);
+            var introduction = Caption("貼上網址，選擇格式，把喜歡的內容存到電腦。", false);
+            introduction.ForeColor = Muted;
+            heading.Controls.Add(introduction, 0, 1);
+            heading.SetColumnSpan(introduction, 2);
             root.Controls.Add(heading, 0, 0);
 
             var urlCard = Card();
-            urlCard.Controls.Add(LabelAt("01  貼上影片或播放清單網址", 18, 13, 420, 24, 10F, true));
+            urlCard.Controls.Add(Caption("01  貼上影片或播放清單網址", true), 0, 0);
             ConfigureText(urlBox, "影片網址");
+            urlBox.Name = "VideoUrl";
+            urlBox.ShortcutsEnabled = true;
             urlBox.HandleCreated += delegate { SendMessage(urlBox.Handle, 0x1501, IntPtr.Zero, "https://www.youtube.com/watch?v=…"); };
-            var urlRow = new TableLayoutPanel { Location = new Point(18, 49), Height = 38, Width = 700, ColumnCount = 2 };
-            urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            urlRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
-            urlBox.Dock = DockStyle.Fill;
-            urlBox.Margin = new Padding(0, 4, 10, 0);
-            ConfigureButton(pasteButton, "貼上", false);
-            pasteButton.Dock = DockStyle.Fill;
-            pasteButton.Margin = Padding.Empty;
+            var urlRow = InputRow(urlBox, pasteButton, "貼上");
+            pasteButton.Name = "PasteUrl";
             pasteButton.Click += delegate { PasteUrl(); };
-            urlRow.Controls.Add(urlBox, 0, 0);
-            urlRow.Controls.Add(pasteButton, 1, 0);
-            urlCard.Controls.Add(urlRow);
-            urlCard.Layout += delegate { urlRow.Width = urlCard.ClientSize.Width - 2 * urlRow.Left; };
+            urlCard.Controls.Add(urlRow, 0, 1);
             root.Controls.Add(urlCard, 0, 1);
 
             var options = Card();
-            options.Controls.Add(LabelAt("02  選擇下載格式", 18, 13, 190, 24, 10F, true));
+            options.RowCount = 3;
+            options.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            var modeRow = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Padding.Empty };
+            var modeTitle = Caption("02  選擇下載格式", true);
+            modeTitle.Margin = new Padding(0, 4, 24, 4);
+            modeRow.Controls.Add(modeTitle);
             videoChoice.Text = "影片";
             audioChoice.Text = "音樂";
-            videoChoice.SetBounds(220, 12, 86, 27);
-            audioChoice.SetBounds(312, 12, 86, 27);
+            foreach (RadioButton radio in new[] { videoChoice, audioChoice })
+            {
+                radio.AutoSize = true;
+                radio.Margin = new Padding(0, 2, 20, 2);
+                modeRow.Controls.Add(radio);
+            }
             videoChoice.Checked = true;
             videoChoice.CheckedChanged += delegate { if (videoChoice.Checked) PopulateFormats(); };
             audioChoice.CheckedChanged += delegate { if (audioChoice.Checked) PopulateFormats(); };
-            options.Controls.Add(videoChoice);
-            options.Controls.Add(audioChoice);
-            var choiceRow = new TableLayoutPanel { Location = new Point(18, 49), Height = 37, Width = 700, ColumnCount = 4 };
-            choiceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 46));
+            options.Controls.Add(modeRow, 0, 0);
+
+            var choiceRow = Table(2, 1);
+            choiceRow.Margin = new Padding(0, 10, 0, 0);
             choiceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60));
-            choiceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 64));
             choiceRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40));
-            choiceRow.Controls.Add(new Label { Text = "格式", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
-            choiceRow.Controls.Add(formatBox, 1, 0);
-            choiceRow.Controls.Add(new Label { Text = "品質", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter }, 2, 0);
-            choiceRow.Controls.Add(qualityBox, 3, 0);
-            foreach (ComboBox box in new[] { formatBox, qualityBox })
-            {
-                box.DropDownStyle = ComboBoxStyle.DropDownList;
-                box.Dock = DockStyle.Fill;
-                box.Margin = new Padding(0, 3, 0, 0);
-                box.FlatStyle = FlatStyle.Standard;
-            }
+            choiceRow.Controls.Add(ChoiceField("格式", formatBox, new Padding(0, 0, 16, 0)), 0, 0);
+            choiceRow.Controls.Add(ChoiceField("品質", qualityBox, Padding.Empty), 1, 0);
+            formatBox.Name = "DownloadFormat";
+            qualityBox.Name = "VideoQuality";
             formatBox.AccessibleName = "下載格式";
             qualityBox.AccessibleName = "影片畫質上限";
             formatBox.SelectedIndexChanged += delegate { UpdateFormatHint(); };
-            options.Controls.Add(choiceRow);
-            formatHint.SetBounds(18, 99, 700, 27);
+            options.Controls.Add(choiceRow, 0, 1);
+            formatHint.AutoSize = true;
+            formatHint.Dock = DockStyle.Fill;
+            formatHint.Margin = new Padding(0, 10, 0, 0);
             formatHint.ForeColor = Muted;
             formatHint.Font = new Font(Font.FontFamily, 9F);
-            options.Controls.Add(formatHint);
-            options.Layout += delegate { choiceRow.Width = options.ClientSize.Width - 2 * choiceRow.Left; formatHint.Width = choiceRow.Width; };
+            options.Controls.Add(formatHint, 0, 2);
             PopulateFormats();
             root.Controls.Add(options, 0, 2);
 
             var destination = Card();
-            destination.Controls.Add(LabelAt("03  儲存位置", 18, 13, 180, 24, 10F, true));
+            var destinationHeading = new FlowLayoutPanel { Dock = DockStyle.Fill, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = true, Margin = Padding.Empty };
+            var destinationTitle = Caption("03  儲存位置", true);
+            destinationTitle.Margin = new Padding(0, 8, 18, 0);
+            destinationHeading.Controls.Add(destinationTitle);
             ConfigureButton(resetFolderButton, "預設下載資料夾", false);
             resetFolderButton.FlatAppearance.BorderSize = 0;
             resetFolderButton.ForeColor = Accent;
-            resetFolderButton.SetBounds(200, 10, 154, 29);
+            resetFolderButton.Padding = new Padding(6, 3, 6, 3);
+            resetFolderButton.Margin = Padding.Empty;
             resetFolderButton.Click += delegate { folderBox.Text = DownloadService.GetDownloadsDirectory(); };
-            destination.Controls.Add(resetFolderButton);
-            var folderRow = new TableLayoutPanel { Location = new Point(18, 49), Height = 38, Width = 700, ColumnCount = 2 };
-            folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            folderRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+            destinationHeading.Controls.Add(resetFolderButton);
+            destination.Controls.Add(destinationHeading, 0, 0);
             ConfigureText(folderBox, "儲存資料夾");
-            folderBox.Dock = DockStyle.Fill;
-            folderBox.Margin = new Padding(0, 4, 10, 0);
-            ConfigureButton(browseButton, "瀏覽…", false);
-            browseButton.Dock = DockStyle.Fill;
-            browseButton.Margin = Padding.Empty;
+            var folderRow = InputRow(folderBox, browseButton, "瀏覽…");
             browseButton.Click += delegate { BrowseFolder(); };
-            folderRow.Controls.Add(folderBox, 0, 0);
-            folderRow.Controls.Add(browseButton, 1, 0);
-            destination.Controls.Add(folderRow);
-            destination.Layout += delegate { folderRow.Width = destination.ClientSize.Width - 2 * folderRow.Left; };
+            destination.Controls.Add(folderRow, 0, 1);
             root.Controls.Add(destination, 0, 3);
 
-            var actions = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = new Padding(0, 8, 0, 10), ColumnCount = 3 };
+            var actions = Table(3, 1);
+            actions.Margin = new Padding(0, 2, 0, 14);
             actions.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 112));
-            actions.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 148));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            actions.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             ConfigureButton(startButton, "開始下載", true);
             ConfigureButton(cancelButton, "取消", false);
             ConfigureButton(openButton, "開啟資料夾", false);
@@ -198,35 +232,35 @@ namespace SimpleDownloader
             root.Controls.Add(actions, 0, 4);
             AcceptButton = startButton;
 
-            var progressPanel = new Panel { Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 4) };
-            statusLabel.SetBounds(0, 7, 690, 25);
+            var progressPanel = Table(1, 4);
+            progressPanel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            progressPanel.Margin = new Padding(0, 0, 0, 8);
+            statusLabel.AutoSize = true;
+            statusLabel.Dock = DockStyle.Fill;
+            statusLabel.Margin = new Padding(0, 0, 0, 10);
             statusLabel.Font = new Font(Font, FontStyle.Bold);
             statusLabel.Text = "準備就緒";
-            statusLabel.AutoEllipsis = true;
-            progressPanel.Controls.Add(statusLabel);
-            progressBar.SetBounds(0, 40, 740, 9);
+            progressPanel.Controls.Add(statusLabel, 0, 0);
+            progressBar.Dock = DockStyle.Top;
+            progressBar.Height = 9;
+            progressBar.Margin = new Padding(0, 0, 0, 10);
             progressBar.Style = ProgressBarStyle.Continuous;
-            progressPanel.Controls.Add(progressBar);
-            detailLabel.SetBounds(0, 60, 590, 34);
+            progressPanel.Controls.Add(progressBar, 0, 1);
+            detailLabel.AutoSize = true;
+            detailLabel.Dock = DockStyle.Fill;
+            detailLabel.Margin = Padding.Empty;
             detailLabel.ForeColor = Muted;
             detailLabel.Font = new Font(Font.FontFamily, 9F);
             detailLabel.Text = "首次下載會自動安裝所需工具，之後即可直接使用。";
-            detailLabel.AutoEllipsis = true;
-            progressPanel.Controls.Add(detailLabel);
+            progressPanel.Controls.Add(detailLabel, 0, 2);
             logToggle.Text = "顯示詳細紀錄";
+            logToggle.AutoSize = true;
+            logToggle.Anchor = AnchorStyles.Right;
             logToggle.LinkColor = Accent;
             logToggle.ActiveLinkColor = Accent;
-            logToggle.SetBounds(610, 60, 130, 25);
-            logToggle.TextAlign = ContentAlignment.TopRight;
+            logToggle.Margin = new Padding(0, 6, 0, 0);
             logToggle.LinkClicked += delegate { ToggleLog(); };
-            progressPanel.Controls.Add(logToggle);
-            progressPanel.Layout += delegate
-            {
-                progressBar.Width = progressPanel.ClientSize.Width;
-                statusLabel.Width = progressPanel.ClientSize.Width;
-                detailLabel.Width = Math.Max(200, progressPanel.ClientSize.Width - logToggle.Width - ScalePixels(15));
-                logToggle.Left = progressPanel.ClientSize.Width - logToggle.Width;
-            };
+            progressPanel.Controls.Add(logToggle, 0, 3);
             root.Controls.Add(progressPanel, 0, 5);
 
             logBox.Multiline = true;
@@ -234,45 +268,112 @@ namespace SimpleDownloader
             logBox.ScrollBars = ScrollBars.Vertical;
             logBox.BackColor = Color.White;
             logBox.Font = new Font("Consolas", 9F);
-            logBox.Dock = DockStyle.Fill;
+            logBox.Height = 150;
+            logBox.Dock = DockStyle.Top;
+            logBox.Margin = new Padding(0, 0, 0, 12);
             logBox.Visible = false;
             logBox.AccessibleName = "下載詳細紀錄";
             root.Controls.Add(logBox, 0, 6);
 
-            var footer = new TableLayoutPanel { Dock = DockStyle.Fill, Margin = Padding.Empty, ColumnCount = 2, Padding = new Padding(0, 12, 0, 0) };
+            var footer = Table(2, 1);
             footer.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            footer.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-            toolsLabel.Dock = DockStyle.Top;
-            toolsLabel.Height = 46;
+            footer.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            toolsLabel.AutoSize = true;
+            toolsLabel.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            toolsLabel.Margin = new Padding(0, 0, 12, 0);
             toolsLabel.ForeColor = Muted;
             toolsLabel.Font = new Font(Font.FontFamily, 9F);
-            toolsLabel.TextAlign = ContentAlignment.MiddleLeft;
-            toolsLabel.AutoEllipsis = true;
             ConfigureButton(installButton, "安裝下載工具", false);
-            installButton.Anchor = AnchorStyles.Top | AnchorStyles.Right;
-            installButton.Size = new Size(170, 38);
-            installButton.Margin = new Padding(0, 4, 0, 4);
+            installButton.Anchor = AnchorStyles.Right;
             installButton.Click += async delegate { await InstallTools(); };
             footer.Controls.Add(toolsLabel, 0, 0);
             footer.Controls.Add(installButton, 1, 0);
             root.Controls.Add(footer, 0, 7);
+            root.ResumeLayout(true);
         }
 
-        private Panel Card()
+        private static TableLayoutPanel Table(int columns, int rows)
         {
-            var panel = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Margin = new Padding(0, 0, 0, 10) };
+            var table = new TableLayoutPanel { Dock = DockStyle.Fill, AutoSize = true,
+                AutoSizeMode = AutoSizeMode.GrowAndShrink, ColumnCount = columns, RowCount = rows,
+                GrowStyle = TableLayoutPanelGrowStyle.FixedSize, Margin = Padding.Empty };
+            for (int row = 0; row < rows; row++) table.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            return table;
+        }
+
+        private TableLayoutPanel Card()
+        {
+            var panel = Table(1, 2);
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.BackColor = Color.White;
+            panel.Padding = new Padding(18, 12, 18, 14);
+            panel.Margin = new Padding(0, 0, 0, 12);
             panel.Paint += delegate(object sender, PaintEventArgs e)
             {
                 using (var pen = new Pen(Color.FromArgb(226, 229, 238)))
-                    e.Graphics.DrawRectangle(pen, 0, 0, panel.ClientSize.Width - 1, panel.ClientSize.Height - 1);
+                    e.Graphics.DrawRectangle(pen, 0, 0, Math.Max(0, panel.ClientSize.Width - 1), Math.Max(0, panel.ClientSize.Height - 1));
             };
             return panel;
         }
 
-        private static Label LabelAt(string text, int x, int y, int w, int h, float size, bool bold, Color? color = null)
+        private static Label Caption(string text, bool bold)
         {
-            return new Label { Text = text, Location = new Point(x, y), Size = new Size(w, h), ForeColor = color ?? Ink,
-                Font = new Font("Microsoft JhengHei UI", size, bold ? FontStyle.Bold : FontStyle.Regular), AutoEllipsis = true };
+            return new Label { Text = text, AutoSize = true, Dock = DockStyle.Fill,
+                Margin = Padding.Empty, ForeColor = Ink,
+                Font = new Font("Microsoft JhengHei UI", 10F, bold ? FontStyle.Bold : FontStyle.Regular) };
+        }
+
+        private TableLayoutPanel InputRow(TextBox box, Button button, string text)
+        {
+            var row = Table(2, 1);
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            row.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            row.Margin = new Padding(0, 10, 0, 0);
+            box.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            box.Margin = new Padding(0, 3, 12, 3);
+            ConfigureButton(button, text, false);
+            button.Margin = Padding.Empty;
+            row.Controls.Add(box, 0, 0);
+            row.Controls.Add(button, 1, 0);
+            return row;
+        }
+
+        private static TableLayoutPanel ChoiceField(string name, ComboBox box, Padding margin)
+        {
+            var field = Table(1, 2);
+            field.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            field.Margin = margin;
+            var label = Caption(name, false);
+            label.Margin = new Padding(0, 0, 0, 5);
+            field.Controls.Add(label, 0, 0);
+            box.DropDownStyle = ComboBoxStyle.DropDownList;
+            box.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+            box.Margin = Padding.Empty;
+            box.FlatStyle = FlatStyle.Standard;
+            // ComboBox ignores a minimum height and TableLayoutPanel can cache
+            // its old preferred height. Give the row the measured native height,
+            // after the font/DPI update, rather than a fixed design-time height.
+            field.RowStyles[1].SizeType = SizeType.Absolute;
+            field.RowStyles[1].Height = box.PreferredHeight;
+            bool heightQueued = false;
+            EventHandler fitHeight = delegate
+            {
+                if (heightQueued || !box.IsHandleCreated || box.IsDisposed) return;
+                heightQueued = true;
+                box.BeginInvoke(new MethodInvoker(delegate
+                {
+                    heightQueued = false;
+                    if (box.IsDisposed) return;
+                    // FontChanged is raised before the native combo finishes
+                    // updating its height. Measure after that update settles.
+                    field.RowStyles[1].Height = Math.Max(box.PreferredHeight, box.Height) + box.Margin.Vertical;
+                }));
+            };
+            box.FontChanged += fitHeight;
+            box.HandleCreated += fitHeight;
+            box.DpiChangedAfterParent += fitHeight;
+            field.Controls.Add(box, 0, 1);
+            return field;
         }
 
         private void ConfigureText(TextBox box, string accessibleName)
@@ -285,6 +386,10 @@ namespace SimpleDownloader
         private static void ConfigureButton(Button button, string text, bool primary)
         {
             button.Text = text;
+            button.AutoSize = true;
+            button.AutoSizeMode = AutoSizeMode.GrowAndShrink;
+            button.MinimumSize = new Size(82, 38);
+            button.Padding = new Padding(14, 6, 14, 6);
             button.FlatStyle = FlatStyle.Flat;
             button.FlatAppearance.BorderColor = primary ? Accent : Color.FromArgb(216, 221, 231);
             button.BackColor = primary ? Accent : Color.White;
@@ -523,22 +628,32 @@ namespace SimpleDownloader
         {
             bool show = !logBox.Visible;
             logBox.Visible = show;
-            int logHeight = ScalePixels(150);
-            root.RowStyles[6].Height = show ? logHeight : 0;
             logToggle.Text = show ? "隱藏詳細紀錄" : "顯示詳細紀錄";
-            if (show && WindowState == FormWindowState.Normal)
-                Height = Math.Min(Height + logHeight, Screen.FromControl(this).WorkingArea.Height - ScalePixels(24));
-            else if (!show && WindowState == FormWindowState.Normal) Height = Math.Max(MinimumSize.Height, Height - logHeight);
+            root.PerformLayout();
+            if (show) ((ScrollableControl)root.Parent).ScrollControlIntoView(logBox);
         }
 
         private int ScalePixels(int value)
         {
-            return Math.Max(1, (int)Math.Round(value * root.Padding.Left / 30.0));
+            using (Graphics graphics = CreateGraphics())
+                return Math.Max(1, (int)Math.Round(value * graphics.DpiX / 96.0));
         }
 
         private void PasteUrl()
         {
-            try { if (Clipboard.ContainsText()) { urlBox.Text = Clipboard.GetText().Trim(); urlBox.Focus(); } }
+            try
+            {
+                if (!Clipboard.ContainsText())
+                {
+                    MessageBox.Show(this, "剪貼簿沒有文字，請先複製影片或播放清單網址。", "貼上網址", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    return;
+                }
+                urlBox.Text = Clipboard.GetText().Trim();
+                urlBox.Focus();
+                urlBox.SelectionStart = urlBox.TextLength;
+                urlBox.SelectionLength = 0;
+                urlBox.ScrollToCaret();
+            }
             catch (Exception ex) { MessageBox.Show(this, "無法讀取剪貼簿：" + ex.Message, Text); }
         }
 

@@ -1,6 +1,4 @@
 using System;
-using System.Drawing;
-using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Threading;
 using System.Windows.Forms;
@@ -9,12 +7,9 @@ namespace SimpleDownloader
 {
     internal static class Program
     {
-        [DllImport("user32.dll")] private static extern bool SetProcessDPIAware();
-
         [STAThread]
         private static void Main()
         {
-            SetProcessDPIAware();
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
             bool created;
